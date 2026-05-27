@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Instalar dependencias basadas en el lockfile
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm install
 
 # Etapa 3: Builder
 FROM base AS builder
