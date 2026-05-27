@@ -8,9 +8,9 @@ Este documento detalla el plan de desarrollo ágil sugerido para el MVP de la ap
 
 | Sprint | Enfoque Principal | Plazo Sugerido | Estimación (Horas) |
 |---|---|---|---|
-| **Sprint 1** | Base de Datos, Onboarding e Importación SIGE | 1 Semana (5 días hábiles) | ~30 hrs |
-| **Sprint 2** | Gestión de Ensayos SIMCE y Pautas de OA | 1 Semana (5 días hábiles) | ~25 hrs |
-| **Sprint 3** | Procesamiento de Hojas con Burbujas (IA Visión) | 2 Semanas (10 días hábiles) | ~50 hrs |
+| ✅ **Sprint 1** | Base de Datos, Onboarding e Importación SIGE | 1 Semana (5 días hábiles) | ~30 hrs |
+| ✅ **Sprint 2** | Gestión de Ensayos SIMCE y Pautas de OA | 1 Semana (5 días hábiles) | ~25 hrs |
+| 🏃‍♂️ **Sprint 3** | Procesamiento de Hojas con Burbujas (IA Visión) | 2 Semanas (10 días hábiles) | ~50 hrs |
 | **Sprint 4** | Dashboard Analítico, Matriz de Logros y Exportación | 1.5 Semanas (8 días hábiles) | ~40 hrs |
 | **Sprint 5** | Motor Remedial (IA) y Trazabilidad (Langfuse) | 1 Semana (5 días hábiles) | ~25 hrs |
 | **Total** | **Desarrollo completo del MVP de miUTP** | **6.5 Semanas** | **~170 hrs** |
@@ -32,15 +32,17 @@ Este documento detalla el plan de desarrollo ágil sugerido para el MVP de la ap
 
 ---
 
-### 📝 Sprint 2: Gestión de Ensayos SIMCE y Pautas de OA
+### ✅ Sprint 2: Gestión de Ensayos SIMCE y Pautas de OA (COMPLETADO)
 * **Objetivo:** Permitir al Jefe de UTP cargar las pruebas y establecer la pauta de corrección asociada a los Objetivos de Aprendizaje (OA) y Habilidades del Mineduc.
 * **Plazo:** 1 Semana (Días 6 a 10).
-* **Entregables Clave:**
-  - Módulo de creación de pruebas: Subida del PDF del Ensayo SIMCE y el archivo de Claves/Pautas (`.docx` / `.pdf`).
-  - Integración de **Stirling-PDF API** para procesar los PDFs de las pruebas en el servidor.
-  - Pipeline de IA (Gemini API) con validación **Zod** para estructurar la clave de respuestas, correlacionando el número de pregunta con la alternativa correcta, su OA y Habilidad evaluada.
-  - Panel de visualización interactivo de la pauta cargada en el frontend.
-* **Criterio de Aceptación:** Se sube el archivo de clave de respuestas de Lectura II Medio y el sistema genera automáticamente el listado de 35 preguntas con sus respectivas alternativas correctas, OAs y habilidades mapeadas, guardándolas en `miutp_preguntas`.
+* **Entregables Clave Actualizados:**
+  - [x] Módulo de creación de pruebas: Subida del documento de Objetivos, Nómina de alumnos y archivo de Claves/Pautas.
+  - [x] Pipeline de IA (Gemini API) con validación estricta usando **Zod** para estructurar la clave de respuestas, correlacionando alternativas con OAs y Habilidades.
+  - [x] Panel de visualización e interacción de la herramienta (ToolsHub) establecido como vista principal.
+  - [x] Persistencia en base de datos: Inserción relacional nativa en Supabase (`miutp_simce_ensayos`, `miutp_simce_objetivos`, `miutp_simce_alumnos`, `miutp_simce_pautas`) manteniendo además un log en JSONB.
+  - [x] **Adelanto Sprint 5:** Integración completa de **Langfuse** para manejo dinámico de prompts y trazabilidad de los consumos de tokens de la IA.
+* **Criterio de Aceptación:** Se cargan los documentos y el sistema utiliza IA generativa (modelos Gemini 2.5 Flash/Pro) guiados por Langfuse para extraer automáticamente la data estructurada en Zod, persistiendo todo correctamente en Supabase.
+
 
 ---
 

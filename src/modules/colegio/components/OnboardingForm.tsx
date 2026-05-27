@@ -6,16 +6,26 @@ import { School, ClipboardList, MapPin, Building, GraduationCap, Loader2, CheckC
 
 interface OnboardingFormProps {
   userId: string
+  userEmail?: string | null
   onComplete: (colegio: any) => void
 }
 
-export default function OnboardingForm({ userId, onComplete }: OnboardingFormProps) {
+export default function OnboardingForm({ userId, userEmail, onComplete }: OnboardingFormProps) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
+  // Inferir nombre de colegio a partir del dominio
+  let initialNombre = ''
+  if (userEmail) {
+    const domain = userEmail.split('@')[1]
+    if (domain && !['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com'].includes(domain)) {
+      initialNombre = domain.split('.')[0].toUpperCase()
+    }
+  }
+
   const [formData, setFormData] = useState({
-    nombre: '',
+    nombre: initialNombre,
     rbd: '',
     tipo: 'HC' as 'TP' | 'HC',
     dependencia: 'Municipal',
