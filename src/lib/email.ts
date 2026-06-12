@@ -1,6 +1,12 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Instancia lazy: se crea en runtime (no en build time) para evitar el error
+// "Missing API key" durante el docker build de Next.js.
+function getResend(): Resend {
+  const key = process.env.RESEND_API_KEY
+  if (!key) throw new Error('Falta RESEND_API_KEY en las variables de entorno del servidor.')
+  return new Resend(key)
+}
 
 const FROM = process.env.RESEND_FROM_EMAIL ?? 'miUTP <noreply@miutp.sditecnologia.cl>'
 
@@ -10,7 +16,7 @@ export async function sendInvitacionEmail(
   invitadoPorNombre: string,
   invitationLink: string,
 ): Promise<void> {
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to,
     subject: `${invitadoPorNombre} te invita a unirte a ${colegioNombre} en miUTP`,
