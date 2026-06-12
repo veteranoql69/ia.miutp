@@ -215,7 +215,7 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                     : 'text-slate-400 border border-transparent hover:text-slate-200 hover:bg-slate-900/40 hover:border-slate-900/40'
                 }`}
               >
-                <BookOpen className="w-4 h-4" /> Programas Curriculares
+                <BookOpen className="w-4 h-4" /> Gestión de Unidad Técnica
               </button>
             </div>
 
@@ -233,16 +233,6 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                 <Settings className="w-4 h-4" /> Centro de Herramientas
               </button>
 
-              <button
-                onClick={() => setActiveTab('management')}
-                className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-semibold no-underline hover:no-underline transition-all duration-200 active:scale-[0.98] outline-none focus:outline-none focus:ring-0 ${
-                  activeTab === 'management'
-                    ? 'bg-indigo-950/40 border border-indigo-500/30 text-indigo-400 shadow-md shadow-indigo-950/30'
-                    : 'text-slate-400 border border-transparent hover:text-slate-200 hover:bg-slate-900/40 hover:border-slate-900/40'
-                }`}
-              >
-                <Settings className="w-4 h-4" /> Carga & Gestión de Datos
-              </button>
             </div>
           </nav>
         </div>

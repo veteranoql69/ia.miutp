@@ -206,6 +206,8 @@ export async function setupSimceToolAction(data: {
   studentsRaw: any[];
   preguntasEnsayoRaw: any[];
   pautaRaw: any[];
+  colegioId: string;
+  creadoPor: string;
 }) {
   try {
     // 1. Insertar el Ensayo
@@ -217,7 +219,9 @@ export async function setupSimceToolAction(data: {
         letra: data.letra,
         asignatura: data.asignatura,
         catalogo_ia: data.oasRaw,
-        estado: 'configurado'
+        estado: 'configurado',
+        colegio_id: data.colegioId,
+        creado_por: data.creadoPor,
       })
       .select('id')
       .single()
@@ -245,7 +249,8 @@ export async function setupSimceToolAction(data: {
         return {
           ensayo_id: ensayoId,
           rut: rutKey ? String(s[rutKey]) : null,
-          nombre_completo: nombreKey ? String(s[nombreKey]) : (Object.values(s)[0] || 'Desconocido')
+          nombre_completo: nombreKey ? String(s[nombreKey]) : (Object.values(s)[0] || 'Desconocido'),
+          curso_letra: data.letra || 'A'
         }
       })
       const { error: alumError } = await supabaseAdmin.from('miutp_simce_alumnos').insert(alumnosToInsert)
@@ -346,12 +351,13 @@ Si el título no es explícito, genera uno descriptivo basado en el contenido (n
   }
 }
 
-// 6. Listar ensayos SIMCE con conteo de elementos configurados
-export async function getEnsayosSimce() {
+// 6. Listar ensayos SIMCE con conteo de elementos configurados y agrupados por cursos
+export async function getEnsayosSimce(colegioId: string) {
   try {
     const { data: ensayos, error } = await supabaseAdmin
       .from('miutp_simce_ensayos')
       .select('id, nombre, nivel, letra, asignatura, estado, fecha_creacion')
+      .eq('colegio_id', colegioId)
       .order('fecha_creacion', { ascending: false })
 
     if (error) throw error
@@ -359,21 +365,73 @@ export async function getEnsayosSimce() {
     // Contar elementos relacionados para cada ensayo
     const ensayosConConteo = await Promise.all(
       (ensayos || []).map(async (e: any) => {
-        const [{ count: nObjetivos }, { count: nAlumnos }, { count: nPreguntas }, { count: nPautas }, { count: nRespuestas }] =
-          await Promise.all([
-            supabaseAdmin.from('miutp_simce_objetivos').select('*', { count: 'exact', head: true }).eq('ensayo_id', e.id),
-            supabaseAdmin.from('miutp_simce_alumnos').select('*', { count: 'exact', head: true }).eq('ensayo_id', e.id),
-            supabaseAdmin.from('miutp_simce_preguntas_ensayo').select('*', { count: 'exact', head: true }).eq('ensayo_id', e.id),
-            supabaseAdmin.from('miutp_simce_pautas').select('*', { count: 'exact', head: true }).eq('ensayo_id', e.id),
-            supabaseAdmin.from('miutp_simce_respuestas').select('*', { count: 'exact', head: true }).eq('ensayo_id', e.id),
-          ])
+        const [
+          { count: nObjetivos },
+          { count: nPreguntas },
+          { count: nPautas },
+          { count: nHojas },        // ← contar desde miutp_simce_hojas (tabla real de procesadas)
+          { data: alumnosRaw }
+        ] = await Promise.all([
+          supabaseAdmin.from('miutp_simce_objetivos').select('*', { count: 'exact', head: true }).eq('ensayo_id', e.id),
+          supabaseAdmin.from('miutp_simce_preguntas_ensayo').select('*', { count: 'exact', head: true }).eq('ensayo_id', e.id),
+          supabaseAdmin.from('miutp_simce_pautas').select('*', { count: 'exact', head: true }).eq('ensayo_id', e.id),
+          supabaseAdmin.from('miutp_simce_hojas').select('*', { count: 'exact', head: true }).eq('ensayo_id', e.id),
+          supabaseAdmin.from('miutp_simce_alumnos').select('id, curso_letra').eq('ensayo_id', e.id)
+        ])
+
+        // Agrupar alumnos por curso_letra
+        const alumnosPorLetra: Record<string, number> = {}
+        const alumnosIdsPorLetra: Record<string, string[]> = {}
+        ;(alumnosRaw || []).forEach((a: any) => {
+          const letra = a.curso_letra || 'A'
+          alumnosPorLetra[letra] = (alumnosPorLetra[letra] || 0) + 1
+          if (!alumnosIdsPorLetra[letra]) {
+            alumnosIdsPorLetra[letra] = []
+          }
+          alumnosIdsPorLetra[letra].push(a.id)
+        })
+
+        // Obtener hojas procesadas por curso (desde miutp_simce_hojas)
+        const cursos = await Promise.all(
+          Object.keys(alumnosPorLetra).map(async (letra) => {
+            const studentIds = alumnosIdsPorLetra[letra] || []
+            let nHojasCurso = 0
+            if (studentIds.length > 0) {
+              const { count } = await supabaseAdmin
+                .from('miutp_simce_hojas')
+                .select('*', { count: 'exact', head: true })
+                .eq('ensayo_id', e.id)
+                .in('alumno_id', studentIds)
+              nHojasCurso = count ?? 0
+            }
+            return {
+              letra,
+              n_alumnos: alumnosPorLetra[letra] || 0,
+              n_respuestas: nHojasCurso
+            }
+          })
+        )
+
+        // Si no tiene alumnos registrados aún, agregamos el curso por defecto del ensayo
+        if (cursos.length === 0) {
+          cursos.push({
+            letra: e.letra || 'A',
+            n_alumnos: 0,
+            n_respuestas: 0
+          })
+        }
+
+        // Ordenar cursos alfabéticamente
+        cursos.sort((a, b) => a.letra.localeCompare(b.letra))
+
         return {
           ...e,
           n_objetivos: nObjetivos ?? 0,
-          n_alumnos: nAlumnos ?? 0,
+          n_alumnos: (alumnosRaw || []).length,
           n_preguntas: nPreguntas ?? 0,
           n_pautas: nPautas ?? 0,
-          n_respuestas: nRespuestas ?? 0,
+          n_respuestas: nHojas ?? 0,  // ← expuesto en raíz para que la tarjeta lo lea
+          cursos
         }
       })
     )
@@ -394,14 +452,14 @@ export async function getEnsayoDetail(ensayoId: string) {
       { data: preguntas },
       { data: pautas },
       { data: alumnos },
-      { count: nRespuestas },
+      { count: nHojas },  // ← contar desde miutp_simce_hojas (tabla real)
     ] = await Promise.all([
       supabaseAdmin.from('miutp_simce_ensayos').select('*').eq('id', ensayoId).single(),
       supabaseAdmin.from('miutp_simce_objetivos').select('codigo, descripcion').eq('ensayo_id', ensayoId).order('codigo'),
       supabaseAdmin.from('miutp_simce_preguntas_ensayo').select('numero, enunciado').eq('ensayo_id', ensayoId).order('numero'),
       supabaseAdmin.from('miutp_simce_pautas').select('numero_pregunta, alternativa_correcta, habilidad_evaluada, oa_codigo').eq('ensayo_id', ensayoId).order('numero_pregunta'),
       supabaseAdmin.from('miutp_simce_alumnos').select('rut, nombre_completo').eq('ensayo_id', ensayoId).order('nombre_completo'),
-      supabaseAdmin.from('miutp_simce_respuestas').select('*', { count: 'exact', head: true }).eq('ensayo_id', ensayoId),
+      supabaseAdmin.from('miutp_simce_hojas').select('*', { count: 'exact', head: true }).eq('ensayo_id', ensayoId),
     ])
 
     return {
@@ -412,11 +470,53 @@ export async function getEnsayoDetail(ensayoId: string) {
         preguntas: preguntas ?? [],
         pautas: pautas ?? [],
         alumnos: alumnos ?? [],
-        n_respuestas: nRespuestas ?? 0,
+        n_respuestas: nHojas ?? 0,  // ← mismo nombre para no romper el UI
       },
     }
   } catch (error: any) {
     console.error('Error in getEnsayoDetail:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+// 8. Agregar un nuevo curso (letra) a un ensayo existente procesando el Excel de nómina
+export async function addCursoToEnsayoAction(
+  ensayoId: string,
+  letra: string,
+  alumnos: { rut: string | null; nombre_completo: string }[]
+) {
+  try {
+    if (!alumnos || alumnos.length === 0) {
+      return { success: false, error: 'No se recibieron alumnos válidos para registrar.' }
+    }
+
+    // 1. Validar que no exista ya ese curso en el ensayo
+    const { data: existingAlumnos, error: checkError } = await supabaseAdmin
+      .from('miutp_simce_alumnos')
+      .select('id')
+      .eq('ensayo_id', ensayoId)
+      .eq('curso_letra', letra)
+      .limit(1)
+
+    if (checkError) throw checkError
+    if (existingAlumnos && existingAlumnos.length > 0) {
+      return { success: false, error: `El curso ${letra} ya se encuentra registrado en este ensayo.` }
+    }
+
+    // 2. Insertar alumnos con su letra correspondiente
+    const alumnosToInsert = alumnos.map((s) => ({
+      ensayo_id: ensayoId,
+      rut: s.rut || null,
+      nombre_completo: s.nombre_completo,
+      curso_letra: letra
+    }))
+
+    const { error: alumError } = await supabaseAdmin.from('miutp_simce_alumnos').insert(alumnosToInsert)
+    if (alumError) throw new Error(`Error al registrar alumnos: ${alumError.message}`)
+
+    return { success: true, data: { n_insertados: alumnos.length } }
+  } catch (error: any) {
+    console.error('Error in addCursoToEnsayoAction:', error)
     return { success: false, error: error.message }
   }
 }

@@ -7,11 +7,13 @@ import { revalidatePath } from 'next/cache'
 export async function getDashboardContext(userId: string) {
   try {
     // 1.1 Obtener perfil del usuario (usando maybeSingle para evitar excepciones en caso de que no exista el registro)
-    let { data: perfil, error: perfilError } = await supabaseAdmin
+    const { data: initialPerfil, error: perfilError } = await supabaseAdmin
       .from('miutp_perfiles')
       .select('*')
       .eq('id', userId)
       .maybeSingle()
+
+    let perfil = initialPerfil
 
     // Si no existe, creamos el perfil dinámicamente
     if (!perfil) {
@@ -467,6 +469,162 @@ export async function getGapsData(pruebaAplicadaId: string) {
       success: true,
       oas,
       habilidades
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+// 7. Cruce pauta vs hojas de respuesta — resultados por alumno
+export interface StudentResult {
+  alumnoId: string
+  nombre: string
+  rut: string
+  cursoLetra: string
+  correctas: number
+  total: number
+  porcentajeLogro: number
+  nivel: 'Adecuado' | 'Elemental' | 'Insuficiente'
+  byOA: { codigo: string; correctas: number; total: number }[]
+  byHabilidad: { habilidad: string; correctas: number; total: number }[]
+}
+
+export async function getSimceStudentResults(ensayoId: string, userId: string): Promise<{
+  success: boolean
+  data?: StudentResult[]
+  ensayo?: { nivel: string; asignatura: string; nombre: string; fecha: string }
+  colegio?: { nombre: string; rbd: string; comuna: string; logo_url: string | null }
+  error?: string
+}> {
+  try {
+    // Validar que el ensayo pertenece al colegio del usuario
+    const { data: perfil } = await supabaseAdmin
+      .from('miutp_perfiles')
+      .select('colegio_id')
+      .eq('id', userId)
+      .single()
+
+    if (!perfil?.colegio_id) {
+      return { success: false, error: 'Perfil sin colegio asociado' }
+    }
+
+    const { data: ensayo, error: ensayoError } = await supabaseAdmin
+      .from('miutp_simce_ensayos')
+      .select('id, colegio_id, nivel, asignatura, nombre, fecha_creacion')
+      .eq('id', ensayoId)
+      .single()
+
+    if (ensayoError || !ensayo) return { success: false, error: 'Ensayo no encontrado' }
+    if (ensayo.colegio_id !== perfil.colegio_id) return { success: false, error: 'No autorizado' }
+
+    // Datos del colegio para el PDF
+    const { data: colegio } = await supabaseAdmin
+      .from('miutp_colegios')
+      .select('nombre, rbd, comuna, logo_url')
+      .eq('id', perfil.colegio_id)
+      .single()
+
+    // Fetch alumnos del ensayo
+    const { data: alumnos, error: alumnosError } = await supabaseAdmin
+      .from('miutp_simce_alumnos')
+      .select('id, nombre_completo, rut, curso_letra')
+      .eq('ensayo_id', ensayoId)
+      .order('nombre_completo', { ascending: true })
+
+    if (alumnosError) throw alumnosError
+
+    if (!alumnos || alumnos.length === 0) {
+      return { success: true, data: [], ensayo: { nivel: ensayo.nivel, asignatura: ensayo.asignatura, nombre: ensayo.nombre || '', fecha: ensayo.fecha_creacion }, colegio: colegio ? { nombre: colegio.nombre, rbd: colegio.rbd, comuna: colegio.comuna || '', logo_url: colegio.logo_url } : undefined }
+    }
+
+    // Fetch respuestas + datos de pauta en una sola query
+    const { data: respuestas, error: respError } = await supabaseAdmin
+      .from('miutp_simce_respuestas')
+      .select(`
+        alumno_id,
+        es_correcta,
+        miutp_simce_pautas!inner (
+          oa_codigo,
+          habilidad_evaluada
+        )
+      `)
+      .eq('ensayo_id', ensayoId)
+
+    if (respError) throw respError
+
+    // Fetch hojas para porcentaje_logro precalculado
+    const { data: hojas } = await supabaseAdmin
+      .from('miutp_simce_hojas')
+      .select('alumno_id, porcentaje_logro')
+      .eq('ensayo_id', ensayoId)
+
+    const hojaByAlumno: Record<string, number> = {}
+    ;(hojas || []).forEach((h: any) => {
+      hojaByAlumno[h.alumno_id] = h.porcentaje_logro ?? 0
+    })
+
+    // Agregar respuestas por alumno
+    const alumnoMap: Record<string, {
+      correctas: number
+      total: number
+      oaMap: Record<string, { correctas: number; total: number }>
+      habMap: Record<string, { correctas: number; total: number }>
+    }> = {}
+
+    ;(respuestas || []).forEach((r: any) => {
+      const aid = r.alumno_id
+      if (!alumnoMap[aid]) alumnoMap[aid] = { correctas: 0, total: 0, oaMap: {}, habMap: {} }
+      const entry = alumnoMap[aid]
+
+      entry.total += 1
+      if (r.es_correcta) entry.correctas += 1
+
+      const oa = r.miutp_simce_pautas?.oa_codigo
+      if (oa) {
+        if (!entry.oaMap[oa]) entry.oaMap[oa] = { correctas: 0, total: 0 }
+        entry.oaMap[oa].total += 1
+        if (r.es_correcta) entry.oaMap[oa].correctas += 1
+      }
+
+      const hab = r.miutp_simce_pautas?.habilidad_evaluada
+      if (hab) {
+        if (!entry.habMap[hab]) entry.habMap[hab] = { correctas: 0, total: 0 }
+        entry.habMap[hab].total += 1
+        if (r.es_correcta) entry.habMap[hab].correctas += 1
+      }
+    })
+
+    const results: StudentResult[] = (alumnos || []).map((a: any) => {
+      const agg = alumnoMap[a.id]
+      const correctas = agg?.correctas ?? 0
+      const total = agg?.total ?? 0
+      const pct = total > 0 ? Math.round((correctas / total) * 100) : (hojaByAlumno[a.id] ?? 0)
+      const nivel: StudentResult['nivel'] = pct >= 67 ? 'Adecuado' : pct >= 33 ? 'Elemental' : 'Insuficiente'
+
+      return {
+        alumnoId: a.id,
+        nombre: a.nombre_completo,
+        rut: a.rut || '',
+        cursoLetra: a.curso_letra || '',
+        correctas,
+        total,
+        porcentajeLogro: pct,
+        nivel,
+        byOA: Object.entries(agg?.oaMap ?? {}).map(([codigo, v]) => ({ codigo, ...v })),
+        byHabilidad: Object.entries(agg?.habMap ?? {}).map(([habilidad, v]) => ({ habilidad, ...v })),
+      }
+    })
+
+    return {
+      success: true,
+      data: results,
+      ensayo: {
+        nivel: ensayo.nivel,
+        asignatura: ensayo.asignatura,
+        nombre: ensayo.nombre || '',
+        fecha: new Date(ensayo.fecha_creacion).toLocaleDateString('es-CL'),
+      },
+      colegio: colegio ? { nombre: colegio.nombre, rbd: colegio.rbd, comuna: colegio.comuna || '', logo_url: colegio.logo_url } : undefined,
     }
   } catch (error: any) {
     return { success: false, error: error.message }

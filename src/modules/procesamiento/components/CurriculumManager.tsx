@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, DragEvent, ChangeEvent } from 'react'
 import {
   CloudUpload, FileText, CheckCircle2, Loader2,
-  ChevronRight, BookOpen, X, ExternalLink, RotateCcw
+  ChevronRight, BookOpen, X, ExternalLink, RotateCcw,
+  BarChart2, GraduationCap, Users
 } from 'lucide-react'
 import { processCurriculumPdfAction, getProgramasCurriculares } from '../actions'
 
@@ -38,7 +39,16 @@ function formatDate(iso: string) {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
+type Seccion = 'simce' | 'paes' | 'sala'
+
+const SECCIONES: { id: Seccion; label: string; icon: React.ReactNode; disponible: boolean }[] = [
+  { id: 'simce', label: 'SIMCE',                    icon: <BarChart2 className="w-4 h-4" />,      disponible: true  },
+  { id: 'paes',  label: 'PAES',                     icon: <GraduationCap className="w-4 h-4" />,  disponible: false },
+  { id: 'sala',  label: 'Gestión de Sala de Clases', icon: <Users className="w-4 h-4" />,          disponible: false },
+]
+
 export default function CurriculumManager() {
+  const [seccion, setSeccion] = useState<Seccion>('simce')
   const [programas, setProgramas] = useState<ProgramaCurricular[]>([])
   const [loadingLista, setLoadingLista] = useState(true)
   const [seleccionado, setSeleccionado] = useState<ProgramaCurricular | null>(null)
@@ -132,11 +142,55 @@ export default function CurriculumManager() {
 
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-slate-100 tracking-tight">Programas Curriculares</h1>
+        <h1 className="text-xl font-bold text-slate-100 tracking-tight">Gestión de Unidad Técnica</h1>
         <p className="text-xs text-slate-500 mt-1">
-          Sube los programas oficiales del Mineduc en PDF para extraer automáticamente los Objetivos de Aprendizaje.
+          Administra los programas curriculares y herramientas pedagógicas por área.
         </p>
       </div>
+
+      {/* Tabs de sección */}
+      <div className="flex gap-2 border-b border-slate-800/60 pb-0">
+        {SECCIONES.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => s.disponible && setSeccion(s.id)}
+            disabled={!s.disponible}
+            className={`relative flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border border-b-0 transition-all duration-200
+              ${seccion === s.id
+                ? 'bg-slate-900 border-slate-700 text-slate-100 -mb-px'
+                : s.disponible
+                  ? 'bg-transparent border-transparent text-slate-500 hover:text-slate-300'
+                  : 'bg-transparent border-transparent text-slate-700 cursor-not-allowed'
+              }`}
+          >
+            {s.icon}
+            {s.label}
+            {!s.disponible && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-600 uppercase tracking-wider">
+                Pronto
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Contenido por sección */}
+      {seccion !== 'simce' && (
+        <div className="flex flex-col items-center justify-center py-24 text-center space-y-4 rounded-2xl border border-dashed border-slate-800 bg-slate-900/10">
+          {seccion === 'paes'
+            ? <GraduationCap className="w-10 h-10 text-slate-700" />
+            : <Users className="w-10 h-10 text-slate-700" />
+          }
+          <div>
+            <p className="text-sm font-bold text-slate-500">
+              {seccion === 'paes' ? 'PAES' : 'Gestión de Sala de Clases'}
+            </p>
+            <p className="text-xs text-slate-600 mt-1">Esta sección estará disponible próximamente.</p>
+          </div>
+        </div>
+      )}
+
+      {seccion === 'simce' && (<>
 
       {/* Upload Zone */}
       <div
@@ -322,6 +376,8 @@ export default function CurriculumManager() {
           </div>
         )}
       </div>
+      </>)}
+
     </div>
   )
 }

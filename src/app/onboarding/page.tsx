@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import OnboardingForm from '@/modules/colegio/components/OnboardingForm'
-import { getColegiosList, saveOnboardingProfesorColegio } from '@/modules/colegio/actions'
+import InvitarProfesoresStep from '@/modules/colegio/components/InvitarProfesoresStep'
+import { getColegiosList, saveOnboardingProfesorColegio, checkUserColegioStatus } from '@/modules/colegio/actions'
 import { createClient } from '@/utils/supabase/client'
-import { 
-  CheckCircle2, 
-  Sparkles, 
-  School, 
-  GraduationCap, 
-  Loader2, 
-  ShieldCheck, 
+import {
+  Sparkles,
+  School,
+  GraduationCap,
+  Loader2,
+  ShieldCheck,
   ChevronRight
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -20,13 +20,14 @@ export default function OnboardingPage() {
   const supabase = createClient()
   
   // Estados de flujo y sesión
-  const [step, setStep] = useState(0) // 0: Rol, 1: Colegio, 2: Listo
+  const [step, setStep] = useState(0) // 0: Rol, 1: Colegio, 2: Invitar (solo UTP)
   const [userId, setUserId] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [sessionLoading, setSessionLoading] = useState(true)
-  
+
   // Selección de rol y datos
   const [rol, setRol] = useState<'utp' | 'profesor' | null>(null)
+  const [colegioCreado, setColegioCreado] = useState<any>(null)
   
   // Carga de colegios existentes (para flujo profesor)
   const [colegiosDisponibles, setColegiosDisponibles] = useState<any[]>([])
@@ -40,27 +41,21 @@ export default function OnboardingPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         router.push('/login')
-      } else {
-        setUserId(user.id)
-        setUserEmail(user.email ?? null)
-        
-        // Verificar si el usuario ya tiene perfil y colegio configurado
-        const { data: perfil } = await supabase
-          .from('miutp_perfiles')
-          .select('colegio_id, rol')
-          .eq('id', user.id)
-          .single()
+        return
+      }
 
-        const perfilData = perfil as any
-        if (perfilData?.colegio_id) {
-          // Si ya tiene colegio, se va al dashboard
-          router.push('/dashboard')
-        } else {
-          setSessionLoading(false)
-        }
+      setUserId(user.id)
+      setUserEmail(user.email ?? null)
+
+      // Verificar con supabaseAdmin (via server action) para evitar problemas de RLS
+      const status = await checkUserColegioStatus(user.id)
+      if (status.hasColegio) {
+        router.push('/dashboard')
+      } else {
+        setSessionLoading(false)
       }
     }
-    
+
     checkUser()
   }, [router])
 
@@ -88,9 +83,10 @@ export default function OnboardingPage() {
     }
   }
 
-  // Paso 1 (UTP) completado: Colegio creado/seleccionado
+  // Paso 1 (UTP) completado: mostrar paso de invitaciones
   const handleColegioComplete = (colegioRegistrado: any) => {
-    router.push('/dashboard')
+    setColegioCreado(colegioRegistrado)
+    setStep(2)
   }
 
   // Paso 1 (Profesor): Seleccionar colegio existente
@@ -205,6 +201,15 @@ export default function OnboardingPage() {
         {/* Paso 1: Configurar Colegio (Jefe de UTP) */}
         {step === 1 && rol === 'utp' && userId && (
           <OnboardingForm userId={userId} userEmail={userEmail} onComplete={handleColegioComplete} />
+        )}
+
+        {/* Paso 2: Invitar profesores (solo UTP) */}
+        {step === 2 && rol === 'utp' && colegioCreado && userId && (
+          <InvitarProfesoresStep
+            colegioId={colegioCreado.id}
+            userId={userId}
+            onComplete={() => router.push('/dashboard')}
+          />
         )}
 
         {/* Paso 1: Vincular Colegio Existente (Profesor) */}

@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/types/database.types'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -13,11 +13,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
 
 // Cliente administrativo con Service Role (omite RLS para tareas críticas del sistema)
-export const supabaseAdmin: any = supabaseServiceKey
-  ? createClient<Database>(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    })
-  : supabase
+if (!supabaseServiceKey) {
+  throw new Error('Falta SUPABASE_SERVICE_ROLE_KEY en las variables de entorno del servidor.')
+}
+
+export const supabaseAdmin: any = createClient<Database>(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+  },
+})

@@ -44,26 +44,58 @@ export async function saveOnboarding(userId: string, data: {
   tipo: 'TP' | 'HC'
   dependencia: string
   comuna: string
+  logoBase64?: string
+  logoMime?: string
 }) {
   try {
-    // Validar datos de entrada con Zod
-    const validated = colegioSchema.parse(data)
+    const { logoBase64, logoMime, ...colegioData } = data
 
-    // 1. Insertar el colegio usando el rol de administrador para garantizar creación
+    // Validar datos de entrada con Zod
+    const validated = colegioSchema.parse(colegioData)
+
+    // 1. Upsert del colegio (evita error de RBD duplicado en reintentos de onboarding)
     const { data: colegio, error: colError } = await supabaseAdmin
       .from('miutp_colegios')
-      .insert({
+      .upsert({
         nombre: validated.nombre,
         rbd: validated.rbd,
         tipo: validated.tipo,
         dependencia: validated.dependencia,
         comuna: validated.comuna,
-      })
+      }, { onConflict: 'rbd' })
       .select()
       .single()
 
     if (colError || !colegio) {
       throw new Error(`Error al registrar el colegio: ${colError?.message}`)
+    }
+
+    // 1b. Subir logo si se proporcionó
+    if (logoBase64 && logoMime) {
+      const ext = logoMime.split('/')[1]?.replace('jpeg', 'jpg') || 'png'
+      const logoBytes = Buffer.from(logoBase64, 'base64')
+
+      await supabaseAdmin.storage.createBucket('logos-colegios', { public: true }).catch(() => {})
+
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from('logos-colegios')
+        .upload(`${colegio.id}/logo.${ext}`, logoBytes, {
+          contentType: logoMime,
+          upsert: true,
+        })
+
+      if (!uploadError) {
+        const { data: urlData } = supabaseAdmin.storage
+          .from('logos-colegios')
+          .getPublicUrl(`${colegio.id}/logo.${ext}`)
+
+        await supabaseAdmin
+          .from('miutp_colegios')
+          .update({ logo_url: urlData.publicUrl })
+          .eq('id', colegio.id)
+
+        colegio.logo_url = urlData.publicUrl
+      }
     }
 
     // Fetch user details from Auth to ensure we have a name if the profile doesn't exist
@@ -275,6 +307,26 @@ export async function importarAlumnos(cursoId: string, anoAcademico: number, csv
     }
   } catch (error: any) {
     return { success: false, error: error.message || 'Error desconocido al importar estudiantes' }
+  }
+}
+
+// Verificar si un usuario ya completó el onboarding (tiene colegio_id en su perfil)
+// Usa supabaseAdmin para evitar problemas de RLS en client components
+export async function checkUserColegioStatus(userId: string): Promise<{
+  hasProfile: boolean
+  hasColegio: boolean
+  colegioId: string | null
+}> {
+  const { data: perfil } = await supabaseAdmin
+    .from('miutp_perfiles')
+    .select('colegio_id')
+    .eq('id', userId)
+    .maybeSingle()
+
+  return {
+    hasProfile: !!perfil,
+    hasColegio: !!(perfil?.colegio_id),
+    colegioId: perfil?.colegio_id ?? null,
   }
 }
 

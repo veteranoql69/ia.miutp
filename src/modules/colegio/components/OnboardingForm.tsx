@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { saveOnboarding } from '../actions'
-import { School, ClipboardList, MapPin, Building, GraduationCap, Loader2, CheckCircle2 } from 'lucide-react'
+import { School, ClipboardList, MapPin, Building, GraduationCap, Loader2, CheckCircle2, ImageIcon, Upload } from 'lucide-react'
 
 interface OnboardingFormProps {
   userId: string
@@ -14,6 +14,8 @@ export default function OnboardingForm({ userId, userEmail, onComplete }: Onboar
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
 
   // Inferir nombre de colegio a partir del dominio
   let initialNombre = ''
@@ -32,6 +34,13 @@ export default function OnboardingForm({ userId, userEmail, onComplete }: Onboar
     comuna: '',
   })
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLogoFile(file)
+    setLogoPreview(URL.createObjectURL(file))
+  }
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
@@ -47,7 +56,16 @@ export default function OnboardingForm({ userId, userEmail, onComplete }: Onboar
     }
 
     startTransition(async () => {
-      const res = await saveOnboarding(userId, formData)
+      let logoBase64: string | undefined
+      let logoMime: string | undefined
+
+      if (logoFile) {
+        const buffer = await logoFile.arrayBuffer()
+        logoBase64 = Buffer.from(buffer).toString('base64')
+        logoMime = logoFile.type
+      }
+
+      const res = await saveOnboarding(userId, { ...formData, logoBase64, logoMime })
       if (res.success) {
         setSuccess(true)
         setTimeout(() => {
@@ -184,6 +202,30 @@ export default function OnboardingForm({ userId, userEmail, onComplete }: Onboar
               </div>
             </div>
           </div>
+
+            {/* Logo del Colegio */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-violet-400" /> Logo del Establecimiento <span className="text-slate-600 normal-case font-normal">(opcional)</span>
+              </label>
+              <div className="flex items-center gap-4">
+                {logoPreview && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoPreview} alt="Logo preview" className="w-16 h-16 rounded-xl object-contain bg-slate-900 border border-slate-800" />
+                )}
+                <label className="flex-1 flex flex-col items-center justify-center gap-2 py-4 px-4 rounded-xl bg-slate-900/50 border border-dashed border-slate-700 hover:border-indigo-500/60 hover:bg-slate-900/80 cursor-pointer transition-all">
+                  <Upload className="w-5 h-5 text-slate-500" />
+                  <span className="text-xs text-slate-500">{logoFile ? logoFile.name : 'PNG, JPG o WEBP'}</span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={handleLogoChange}
+                    disabled={isPending}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            </div>
 
           <button
             type="submit"

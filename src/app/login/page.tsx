@@ -26,11 +26,23 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black text-slate-100 flex flex-col justify-center items-center p-4 relative overflow-hidden">
-      
-      {/* Fondo decorativo con luces */}
-      <div className="absolute top-[20%] left-[20%] w-[40%] h-[40%] bg-violet-900/10 rounded-full blur-[100px]" />
-      <div className="absolute bottom-[20%] right-[20%] w-[40%] h-[40%] bg-indigo-900/10 rounded-full blur-[100px]" />
+    <main className="min-h-screen text-slate-100 flex flex-col justify-center items-center p-4 relative overflow-hidden">
+
+      {/* Imagen de fondo SVG */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/login-bg.svg"
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
+      />
+
+      {/* Overlay oscuro para legibilidad */}
+      <div className="absolute inset-0 bg-black/30" />
+
+      {/* Luces decorativas encima */}
+      <div className="absolute top-[15%] left-[15%] w-[35%] h-[35%] bg-violet-900/8 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[15%] right-[15%] w-[35%] h-[35%] bg-indigo-900/8 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="w-full max-w-md p-8 rounded-2xl bg-slate-950/80 border border-slate-800/80 backdrop-blur-xl shadow-2xl space-y-8 relative overflow-hidden text-center transition-all duration-300">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-1 bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full blur-sm" />
@@ -47,7 +59,7 @@ export default function LoginPage() {
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-100 to-slate-400 font-display">miUTP</h1>
           <p className="text-xs text-slate-400 max-w-xs">
-            Portal premium de analítica y automatización operativa del SIMCE para colegios chilenos.
+            Plataforma integral de Gestión de Unidad Técnica Pedagógica para colegios chilenos.
           </p>
         </div>
 

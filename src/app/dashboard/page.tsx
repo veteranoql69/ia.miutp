@@ -48,7 +48,7 @@ export default function DashboardPage() {
       {({ profile, cursoSeleccionado, ensayoSeleccionado, activeTab, onRefresh }) => {
         switch (activeTab) {
           case 'kpis':
-            return <BentoGridKPIs ensayoSeleccionado={ensayoSeleccionado} />
+            return <BentoGridKPIs ensayoSeleccionado={ensayoSeleccionado} colegioId={profile?.colegio_id} userId={userId ?? undefined} />
           case 'matrix':
             return <ResponseMatrix ensayoSeleccionado={ensayoSeleccionado} />
           case 'gaps':
@@ -56,7 +56,7 @@ export default function DashboardPage() {
           case 'curriculum':
             return <CurriculumManager />
           case 'herramientas':
-            return <ToolsHub />
+            return <ToolsHub colegioId={profile?.colegio_id ?? ''} userId={userId!} />
           case 'management':
             return (
               <DataManagement
@@ -66,7 +66,7 @@ export default function DashboardPage() {
               />
             )
           default:
-            return <BentoGridKPIs ensayoSeleccionado={ensayoSeleccionado} />
+            return <BentoGridKPIs ensayoSeleccionado={ensayoSeleccionado} userId={userId ?? undefined} />
         }
       }}
     </DashboardShell>

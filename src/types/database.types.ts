@@ -18,6 +18,7 @@ export interface Database {
           dependencia: string | null
           comuna: string | null
           configuracion_ia: Json
+          logo_url: string | null
           creado_en: string
           actualizado_en: string
         }
@@ -29,6 +30,7 @@ export interface Database {
           dependencia?: string | null
           comuna?: string | null
           configuracion_ia?: Json
+          logo_url?: string | null
           creado_en?: string
           actualizado_en?: string
         }
@@ -40,6 +42,7 @@ export interface Database {
           dependencia?: string | null
           comuna?: string | null
           configuracion_ia?: Json
+          logo_url?: string | null
           creado_en?: string
           actualizado_en?: string
         }
